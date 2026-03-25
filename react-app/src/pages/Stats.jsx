@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Clock, CheckCheck, Sparkles, BookOpen, Cpu, RefreshCcw } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Clock, CheckCheck, Sparkles, BookOpen, Cpu, RefreshCcw, Download, Bell, BellOff, TrendingUp } from 'lucide-react';
 import { fetchGemini } from '../services/gemini';
 import { formatTime } from '../utils/formatters';
 
@@ -9,15 +9,76 @@ const CATEGORIES = [
   { key: 'rutina',   label: 'Rutină',   color: '#f59e0b', bg: 'bg-amber-500', lightBg: 'bg-amber-50 dark:bg-amber-900/20', text: 'text-amber-600 dark:text-amber-400' },
 ];
 
+// ─── A. Export CSV ────────────────────────────────────────────────
+const exportCSV = (tasks) => {
+  const header = ['Titlu', 'Categorie', 'Prioritate', 'Data', 'Status', 'Timp (min)', 'Jurnal'];
+  const rows = tasks.map(t => [
+    `"${t.title.replace(/"/g, '""')}"`,
+    t.category,
+    t.priority,
+    t.date,
+    t.completed ? 'Finalizat' : 'Activ',
+    Math.round((t.timeSpent || 0) / 60),
+    `"${(t.journal || '').replace(/"/g, '""')}"`,
+  ]);
+  const csv = [header, ...rows].map(r => r.join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `evotrack_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+// ─── C. Notificări push ───────────────────────────────────────────
+const requestNotifPermission = async () => {
+  if (!('Notification' in window)) return false;
+  const perm = await Notification.requestPermission();
+  return perm === 'granted';
+};
+
+const sendTaskReminder = (tasks) => {
+  const today = new Date().toISOString().split('T')[0];
+  const dueTasks = tasks.filter(t => !t.completed && t.date === today);
+  if (dueTasks.length === 0) {
+    new Notification('EvoTrack ✅', { body: 'Nicio sarcină scadentă azi!', icon: '/vite.svg' });
+    return;
+  }
+  dueTasks.slice(0, 3).forEach(t => {
+    new Notification(`⏰ Sarcină scadentă azi`, {
+      body: t.title,
+      icon: '/vite.svg',
+      tag: `task-${t.id}`,
+    });
+  });
+};
+
+// ─── B. Grafic 7 zile (calculat din tasks) ───────────────────────
+const buildWeeklyData = (tasks) => {
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0];
+    const label = d.toLocaleDateString('ro-RO', { weekday: 'short' });
+    const completed = tasks.filter(t => t.completed && t.date === dateStr).length;
+    const added = tasks.filter(t => t.date === dateStr).length;
+    days.push({ label, dateStr, completed, added });
+  }
+  return days;
+};
+
+
 export default function Stats({ tasks }) {
   const [aiReport, setAiReport] = useState('Analizează-ți progresul apăsând butonul de mai sus.');
   const [loading, setLoading] = useState(false);
+  const [notifGranted, setNotifGranted] = useState(Notification?.permission === 'granted');
 
   const completedTasks = tasks.filter(t => t.completed);
   const activeTasks = tasks.filter(t => !t.completed);
   const totTime = tasks.reduce((a, t) => a + t.timeSpent, 0);
 
-  // Calc per categorie
   const catData = CATEGORIES.map(cat => {
     const time = tasks.filter(t => t.category === cat.key).reduce((a, t) => a + t.timeSpent, 0);
     const count = tasks.filter(t => t.category === cat.key).length;
@@ -25,14 +86,16 @@ export default function Stats({ tasks }) {
   });
   const totalTime = catData.reduce((a, c) => a + c.time, 0) || 1;
 
-  // SVG donut segments
-  let offset = 25; // start at top
+  let offset = 25;
   const segments = catData.map(cat => {
     const pct = (cat.time / totalTime) * 100;
     const seg = { ...cat, pct, offset };
     offset = offset - pct;
     return seg;
   });
+
+  const weeklyData = buildWeeklyData(tasks);
+  const maxVal = Math.max(...weeklyData.map(d => d.added), 1);
 
   const generateAIReport = async () => {
     setLoading(true);
@@ -50,33 +113,70 @@ export default function Stats({ tasks }) {
     setLoading(false);
   };
 
+  const handleNotifToggle = async () => {
+    if (notifGranted) {
+      sendTaskReminder(tasks);
+    } else {
+      const ok = await requestNotifPermission();
+      setNotifGranted(ok);
+      if (ok) sendTaskReminder(tasks);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto fade-in space-y-6">
 
+      {/* Header cu butoane Export + Notificări */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h2 className="text-2xl font-black text-slate-800 dark:text-slate-100">Statistici</h2>
+        <div className="flex gap-2">
+          {/* Export CSV */}
+          <button
+            onClick={() => exportCSV(tasks)}
+            disabled={tasks.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 rounded-2xl text-sm font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-all disabled:opacity-40 border border-emerald-200 dark:border-emerald-900/30"
+          >
+            <Download className="w-4 h-4" /> Export CSV
+          </button>
+          {/* Notificări */}
+          <button
+            onClick={handleNotifToggle}
+            className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-bold transition-all border ${
+              notifGranted
+                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-900/30 hover:bg-blue-100'
+                : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+            }`}
+          >
+            {notifGranted ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+            {notifGranted ? 'Trimite reminder' : 'Activează notificări'}
+          </button>
+        </div>
+      </div>
+
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-card dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-5 rounded-3xl shadow-sm flex flex-col items-center text-center transition-colors duration-300">
+        <div className="bg-card dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-5 rounded-3xl shadow-sm flex flex-col items-center text-center transition-colors duration-300 slide-up" style={{animationDelay:'0ms'}}>
           <div className="w-11 h-11 bg-blue-50 dark:bg-blue-900/30 text-blue-600 rounded-2xl flex items-center justify-center mb-3">
             <Clock className="w-5 h-5" />
           </div>
           <h4 className="text-slate-400 dark:text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">Timp Total</h4>
           <div className="text-xl font-black text-slate-800 dark:text-slate-100">{formatTime(totTime)}</div>
         </div>
-        <div className="bg-card dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-5 rounded-3xl shadow-sm flex flex-col items-center text-center transition-colors duration-300">
+        <div className="bg-card dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-5 rounded-3xl shadow-sm flex flex-col items-center text-center transition-colors duration-300 slide-up" style={{animationDelay:'60ms'}}>
           <div className="w-11 h-11 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-500 rounded-2xl flex items-center justify-center mb-3">
             <CheckCheck className="w-5 h-5" />
           </div>
           <h4 className="text-slate-400 dark:text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">Finalizate</h4>
           <div className="text-xl font-black text-slate-800 dark:text-slate-100">{completedTasks.length}</div>
         </div>
-        <div className="bg-card dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-5 rounded-3xl shadow-sm flex flex-col items-center text-center transition-colors duration-300">
+        <div className="bg-card dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-5 rounded-3xl shadow-sm flex flex-col items-center text-center transition-colors duration-300 slide-up" style={{animationDelay:'120ms'}}>
           <div className="w-11 h-11 bg-amber-50 dark:bg-amber-900/30 text-amber-500 rounded-2xl flex items-center justify-center mb-3">
             <BookOpen className="w-5 h-5" />
           </div>
           <h4 className="text-slate-400 dark:text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">Active</h4>
           <div className="text-xl font-black text-slate-800 dark:text-slate-100">{activeTasks.length}</div>
         </div>
-        <div className="bg-card dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-5 rounded-3xl shadow-sm flex flex-col items-center text-center transition-colors duration-300">
+        <div className="bg-card dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-5 rounded-3xl shadow-sm flex flex-col items-center text-center transition-colors duration-300 slide-up" style={{animationDelay:'180ms'}}>
           <div className="w-11 h-11 bg-violet-50 dark:bg-violet-900/30 text-violet-500 rounded-2xl flex items-center justify-center mb-3">
             <Cpu className="w-5 h-5" />
           </div>
@@ -85,19 +185,14 @@ export default function Stats({ tasks }) {
         </div>
       </div>
 
-      {/* Donut + Legend + AI Report */}
+      {/* Donut + AI Report */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-        {/* Donut Chart cu legendă */}
         <div className="bg-card dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 rounded-3xl shadow-sm transition-colors duration-300">
           <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 mb-6">Distribuție Categorii</h3>
           <div className="flex items-center gap-8">
-            {/* SVG Donut */}
             <div className="relative shrink-0">
               <svg width="160" height="160" viewBox="0 0 42 42" className="transform -rotate-90">
-                {/* Background ring */}
                 <circle cx="21" cy="21" r="15.91" fill="transparent" stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeWidth="5" />
-                {/* Segments */}
                 {segments.map(seg => (
                   seg.pct > 0 && (
                     <circle
@@ -113,14 +208,11 @@ export default function Stats({ tasks }) {
                   )
                 ))}
               </svg>
-              {/* Center text */}
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <span className="text-2xl font-black text-slate-800 dark:text-slate-100">{tasks.length}</span>
                 <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Sarcini</span>
               </div>
             </div>
-
-            {/* Legend */}
             <div className="flex-1 flex flex-col gap-3">
               {catData.map(cat => {
                 const pct = Math.round((cat.time / totalTime) * 100);
@@ -133,10 +225,7 @@ export default function Stats({ tasks }) {
                         <span className="text-xs font-bold text-slate-400 dark:text-slate-500">{cat.count} sarcini</span>
                       </div>
                       <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5">
-                        <div
-                          className={`h-1.5 rounded-full transition-all duration-700 ${cat.bg}`}
-                          style={{ width: `${pct}%` }}
-                        />
+                        <div className={`h-1.5 rounded-full transition-all duration-700 ${cat.bg}`} style={{ width: `${pct}%` }} />
                       </div>
                     </div>
                   </div>
@@ -146,7 +235,6 @@ export default function Stats({ tasks }) {
           </div>
         </div>
 
-        {/* AI Report */}
         <div className="bg-card dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 rounded-3xl shadow-sm transition-colors duration-300 flex flex-col">
           <div className="flex justify-between items-center mb-4">
             <div className="flex items-center gap-2">
@@ -174,6 +262,63 @@ export default function Stats({ tasks }) {
           </div>
         </div>
       </div>
+
+      {/* B. Grafic Activitate 7 Zile */}
+      <div className="bg-card dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 rounded-3xl shadow-sm transition-colors duration-300">
+        <div className="flex items-center gap-2 mb-6">
+          <div className="w-8 h-8 bg-blue-50 dark:bg-blue-900/30 text-blue-600 rounded-xl flex items-center justify-center">
+            <TrendingUp className="w-4 h-4" />
+          </div>
+          <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Activitate — Ultimele 7 Zile</h3>
+        </div>
+        <div className="flex items-end gap-3 h-40">
+          {weeklyData.map((day, i) => (
+            <div key={day.dateStr} className="flex-1 flex flex-col items-center gap-2">
+              {/* Bara adăugate */}
+              <div className="w-full flex flex-col items-center gap-1 justify-end" style={{ height: '120px' }}>
+                <div className="w-full flex flex-col items-center gap-0.5 justify-end h-full">
+                  {/* Finalizate (verde, deasupra) */}
+                  {day.completed > 0 && (
+                    <div
+                      className="w-4/5 bg-emerald-400 dark:bg-emerald-500 rounded-t-lg transition-all duration-700"
+                      style={{ height: `${(day.completed / maxVal) * 100}px` }}
+                      title={`${day.completed} finalizate`}
+                    />
+                  )}
+                  {/* Adăugate (albastru, dedesubt) */}
+                  <div
+                    className="w-4/5 bg-blue-500/30 dark:bg-blue-500/20 rounded-lg transition-all duration-700"
+                    style={{ height: `${Math.max((day.added / maxVal) * 80, day.added > 0 ? 8 : 0)}px` }}
+                    title={`${day.added} adăugate`}
+                  />
+                </div>
+              </div>
+              {/* Număr */}
+              <span className="text-[10px] font-black text-slate-500 dark:text-slate-400">
+                {day.added > 0 ? day.added : '·'}
+              </span>
+              {/* Ziua */}
+              <span className={`text-[10px] font-bold uppercase ${
+                day.dateStr === new Date().toISOString().split('T')[0]
+                  ? 'text-blue-600 dark:text-blue-400'
+                  : 'text-slate-400 dark:text-slate-500'
+              }`}>
+                {day.label}
+              </span>
+            </div>
+          ))}
+        </div>
+        {/* Legendă */}
+        <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+            <div className="w-3 h-3 bg-blue-500/40 rounded" /> Adăugate
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+            <div className="w-3 h-3 bg-emerald-400 rounded" /> Finalizate
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 }

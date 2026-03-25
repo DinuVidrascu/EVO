@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Sparkles, RefreshCcw, Plus, ArrowRight, ClipboardCheck, CircleCheck, CircleAlert, CalendarClock, Timer, Play, Pause, Square, Trash2 } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Sparkles, RefreshCcw, Plus, ArrowRight, ClipboardCheck, CircleCheck, CircleAlert, CalendarClock, Timer, Play, Pause, Square, Trash2, Search, X, SlidersHorizontal, GripVertical } from 'lucide-react';
 import { fetchGemini } from '../services/gemini';
 import { getCategoryData, getPriorityIconStyles, formatDateDisplay, formatTime } from '../utils/formatters';
 import { JournalModal, AIModal } from '../components/Modals';
@@ -18,10 +18,56 @@ export default function Dashboard({ tasks, addTask, updateTask, toggleTaskStatus
 
   const [activeAIModal, setActiveAIModal] = useState({ open: false, task: null });
   const [activeJournalModal, setActiveJournalModal] = useState({ open: false, task: null });
-  const [toast, setToast] = useState(null); // { msg, type }
-  const [confirmDelete, setConfirmDelete] = useState(null); // task id to delete
+  const [toast, setToast] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editingTitle, setEditingTitle] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState('all');
+  const [filterPriority, setFilterPriority] = useState('all');
+  const [dragId, setDragId] = useState(null);
+  const [dragOverId, setDragOverId] = useState(null);
+  const dragList = useRef([]);
 
-  const activeTasks = tasks.filter(t => !t.completed).sort((a,b) => new Date(a.date) - new Date(b.date));
+  const activeTasks = tasks
+    .filter(t => !t.completed)
+    .sort((a, b) => {
+      if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
+      return new Date(a.date) - new Date(b.date);
+    });
+
+  // Filtrare dinamică după search + categorie + prioritate
+  const filteredTasks = activeTasks
+    .filter(t => !searchQuery || t.title.toLowerCase().includes(searchQuery.toLowerCase()))
+    .filter(t => filterCategory === 'all' || t.category === filterCategory)
+    .filter(t => filterPriority === 'all' || t.priority === filterPriority);
+
+  const hasFilters = searchQuery || filterCategory !== 'all' || filterPriority !== 'all';
+  const resetFilters = () => { setSearchQuery(''); setFilterCategory('all'); setFilterPriority('all'); };
+
+  // D. Drag & Drop reorder
+  const handleDragStart = (e, id) => {
+    setDragId(id);
+    dragList.current = [...filteredTasks.map(t => t.id)];
+    e.dataTransfer.effectAllowed = 'move';
+  };
+  const handleDragOver = (e, id) => {
+    e.preventDefault();
+    if (id !== dragId) setDragOverId(id);
+  };
+  const handleDrop = (e, targetId) => {
+    e.preventDefault();
+    if (!dragId || dragId === targetId) return;
+    const list = [...dragList.current];
+    const from = list.indexOf(dragId);
+    const to = list.indexOf(targetId);
+    list.splice(from, 1);
+    list.splice(to, 0, dragId);
+    list.forEach((id, idx) => updateTask(id, { order: idx }));
+    setDragId(null);
+    setDragOverId(null);
+  };
+  const handleDragEnd = () => { setDragId(null); setDragOverId(null); };
   const completedTasks = tasks.filter(t => t.completed);
 
   // Citatul se incarca DOAR la apasarea manuala a butonului refresh
@@ -248,26 +294,123 @@ export default function Dashboard({ tasks, addTask, updateTask, toggleTaskStatus
             </div>
         </div>
 
+        {/* Bara Search + Filtre */}
+        <div className="bg-card dark:bg-slate-900 dark:border-slate-800 border border-slate-100 rounded-3xl p-4 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center shadow-sm dark:shadow-none">
+          {/* Search input */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Caută sarcini..."
+              className="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm text-slate-700 dark:text-slate-300 placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500/30 transition-all"
+            />
+          </div>
+          {/* Filtru Categorie */}
+          <select
+            value={filterCategory}
+            onChange={e => setFilterCategory(e.target.value)}
+            className="px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm text-slate-600 dark:text-slate-300 outline-none font-medium cursor-pointer"
+          >
+            <option value="all">📂 Categorie</option>
+            <option value="invatare">🧠 Învățare</option>
+            <option value="proiect">💻 Proiect</option>
+            <option value="rutina">🔄 Rutină</option>
+          </select>
+          {/* Filtru Prioritate */}
+          <select
+            value={filterPriority}
+            onChange={e => setFilterPriority(e.target.value)}
+            className="px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm text-slate-600 dark:text-slate-300 outline-none font-medium cursor-pointer"
+          >
+            <option value="all">⚡ Prioritate</option>
+            <option value="high">🔼 Mare</option>
+            <option value="medium">⏺ Medie</option>
+            <option value="low">🔽 Mică</option>
+          </select>
+          {/* Reset filtre */}
+          {hasFilters && (
+            <button
+              onClick={resetFilters}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-rose-50 dark:bg-rose-900/20 text-rose-500 dark:text-rose-400 rounded-2xl text-sm font-bold hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-all shrink-0"
+            >
+              <X className="w-3.5 h-3.5" /> Resetează
+            </button>
+          )}
+        </div>
+
+        {/* Counter rezultate când sunt filtre active */}
+        {hasFilters && (
+          <div className="flex items-center gap-2 px-1 text-sm text-slate-500 dark:text-slate-400">
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+            <span>
+              {filteredTasks.length === 0
+                ? 'Nicio sarcină nu corespunde filtrelor'
+                : `${filteredTasks.length} din ${activeTasks.length} sarcini`}
+            </span>
+          </div>
+        )}
+
         {/* Lista Sarcini Active */}
         <div className="flex flex-col gap-4">
-          {activeTasks.length === 0 ? (
-            <div className="text-center py-6 bg-white dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
-                <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 rounded-full flex items-center justify-center mx-auto mb-2 text-lg">
-                    <ClipboardCheck className="w-6 h-6" />
+          {filteredTasks.length === 0 ? (
+            hasFilters ? (
+              <div className="slide-up text-center py-10 bg-slate-50 dark:bg-slate-900/50 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700">
+                <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-sm">
+                  <Search className="w-7 h-7 text-slate-400" />
                 </div>
-                <h4 className="font-bold text-slate-600 dark:text-slate-300 text-sm">Totul este curat!</h4>
-                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Nu ai nicio sarcină planificată deocamdată.</p>
+                <h4 className="font-bold text-slate-600 dark:text-slate-300 mb-1">Niciun rezultat</h4>
+                <p className="text-sm text-slate-400 max-w-xs mx-auto mb-3">Nicio sarcină nu corespunde filtrelor selectate.</p>
+                <button onClick={resetFilters} className="text-sm text-blue-600 dark:text-blue-400 font-bold hover:underline">Resetează filtrele</button>
+              </div>
+            ) : (
+            <div className="slide-up text-center py-12 bg-gradient-to-b from-blue-50/60 to-transparent dark:from-blue-900/10 rounded-3xl border border-dashed border-blue-200 dark:border-blue-900/30">
+              <div className="relative w-20 h-20 mx-auto mb-4">
+                <div className="absolute inset-0 bg-blue-100 dark:bg-blue-900/30 rounded-3xl animate-pulse" />
+                <div className="relative w-20 h-20 bg-white dark:bg-slate-900 rounded-3xl flex items-center justify-center shadow-sm border border-blue-100 dark:border-blue-900/50">
+                  <svg className="w-10 h-10" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="6" y="10" width="36" height="30" rx="4" fill="#EFF6FF" stroke="#93C5FD" strokeWidth="2"/>
+                    <rect x="6" y="10" width="36" height="8" rx="4" fill="#BFDBFE"/>
+                    <path d="M14 26h20M14 32h12" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round"/>
+                    <circle cx="36" cy="34" r="7" fill="#2563eb"/>
+                    <path d="M33 34l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+              </div>
+              <h4 className="font-bold text-slate-700 dark:text-slate-300 text-base mb-1">Ești la zi! 🎉</h4>
+              <p className="text-sm text-slate-400 dark:text-slate-500 max-w-xs mx-auto">Nu ai nicio sarcină activă. Adaugă prima ta activitate folosind formularul de mai sus.</p>
             </div>
+            )
           ) : (
-            activeTasks.map(t => {
+            filteredTasks.map(t => {
               const isTracking = timerProps.currentTrackingTaskId === t.id;
               const cat = getCategoryData(t.category);
               const prioStyles = getPriorityIconStyles(t.priority);
-              
+              const isDragging = dragId === t.id;
+              const isOver = dragOverId === t.id;
+
               return (
-                <div key={t.id} className={`fade-in bg-card dark:border-slate-800 dark:bg-slate-900 border ${isTracking ? 'border-blue-600 ring-2 ring-blue-600/20' : 'border-slate-100'} rounded-3xl p-5 flex items-center justify-between shadow-sm dark:shadow-none transition-colors duration-300`}>
+                <div
+                  key={t.id}
+                  draggable={!editingId}
+                  onDragStart={e => handleDragStart(e, t.id)}
+                  onDragOver={e => handleDragOver(e, t.id)}
+                  onDrop={e => handleDrop(e, t.id)}
+                  onDragEnd={handleDragEnd}
+                  className={`fade-in bg-card dark:border-slate-800 dark:bg-slate-900 border ${
+                    isTracking ? 'border-blue-600 ring-2 ring-blue-600/20' :
+                    isOver ? 'border-blue-400 border-dashed' :
+                    'border-slate-100'
+                  } rounded-3xl p-5 flex items-center justify-between shadow-sm dark:shadow-none transition-all duration-200 ${isDragging ? 'opacity-40 scale-95' : 'opacity-100'}`}
+                >
                     <div className="flex items-center gap-5 flex-1 overflow-hidden">
+                        {/* Drag handle */}
+                        <div className="text-slate-300 dark:text-slate-700 cursor-grab active:cursor-grabbing shrink-0 hover:text-slate-400 dark:hover:text-slate-500 transition-colors">
+                          <GripVertical className="w-4 h-4" />
+                        </div>
                         <button onClick={() => {
+
                             toggleTaskStatus(t.id);
                             if(isTracking) timerProps.stopTracking();
                         }} className="text-slate-200 dark:text-slate-700 hover:text-emerald-400 dark:hover:text-emerald-400 transition-transform">
@@ -275,8 +418,29 @@ export default function Dashboard({ tasks, addTask, updateTask, toggleTaskStatus
                         </button>
                         <div className="flex-1 truncate">
                             <div className="flex items-center gap-3 mb-1">
-                                <CircleAlert className={`w-3 h-3 ${prioStyles}`} />
-                                <h4 className={`font-bold text-slate-800 dark:text-slate-100 truncate ${isTracking ? 'text-blue-600 dark:text-blue-600' : ''}`}>{t.title}</h4>
+                            <CircleAlert className={`w-3 h-3 ${prioStyles} shrink-0`} />
+                            {editingId === t.id ? (
+                              <input
+                                autoFocus
+                                value={editingTitle}
+                                onChange={e => setEditingTitle(e.target.value)}
+                                onBlur={() => {
+                                  if (editingTitle.trim()) updateTask(t.id, { title: editingTitle.trim() });
+                                  setEditingId(null);
+                                }}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') e.target.blur();
+                                  if (e.key === 'Escape') { setEditingId(null); }
+                                }}
+                                className="font-bold text-slate-800 dark:text-slate-100 bg-blue-50 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 rounded-lg px-2 py-0.5 outline-none flex-1 min-w-0 text-sm"
+                              />
+                            ) : (
+                              <h4
+                                className={`font-bold text-slate-800 dark:text-slate-100 truncate cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors ${isTracking ? 'text-blue-600 dark:text-blue-600' : ''}`}
+                                onDoubleClick={() => { setEditingId(t.id); setEditingTitle(t.title); }}
+                                title="Dublu-click pentru a edita"
+                              >{t.title}</h4>
+                            )}
                             </div>
                             <div className="flex flex-wrap items-center gap-3 text-xs font-bold text-slate-400 dark:text-slate-500">
                                 <span className={`${cat.styles} text-[10px] font-bold px-2 py-0.5 rounded-lg`}>{cat.label}</span> 

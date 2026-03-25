@@ -72,7 +72,9 @@ function App() {
         <MobileHeader setView={setActiveView} activeView={activeView} toggleTheme={toggleTheme} theme={theme} />
         <main className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-10 pb-12">
           <ErrorBoundary>
-            {renderView()}
+            <div key={activeView} className="page-enter h-full">
+              {renderView()}
+            </div>
           </ErrorBoundary>
         </main>
       </div>

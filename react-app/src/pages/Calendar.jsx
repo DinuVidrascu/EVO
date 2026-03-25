@@ -29,10 +29,10 @@ export default function Calendar({ tasks, updateTask, deleteTask }) {
   const monthDays = Array.from({ length: days }, (_, i) => i + 1);
 
   return (
-    <div className="max-w-6xl mx-auto fade-in">
-      <div className="bg-card dark:border-slate-800 dark:bg-slate-900 transition-colors duration-300 rounded-3xl shadow-sm dark:shadow-none border border-slate-100 p-8">
-        <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
-            <h2 className="text-3xl font-extrabold text-slate-800 dark:text-slate-100">{moNames[mo]} {yr}</h2>
+    <div className="max-w-7xl mx-auto fade-in lg:px-4 h-full flex flex-col">
+      <div className="bg-card dark:border-slate-800 dark:bg-slate-900 transition-colors duration-300 rounded-3xl shadow-sm dark:shadow-none border border-slate-100 p-4 md:p-6 lg:p-8 flex-1 flex flex-col overflow-hidden">
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-6 md:mb-8 gap-4 shrink-0">
+            <h2 className="text-2xl md:text-3xl font-extrabold text-slate-800 dark:text-slate-100">{moNames[mo]} {yr}</h2>
             <div className="flex gap-2 bg-background dark:bg-slate-950 transition-colors duration-300 p-1.5 rounded-2xl">
                 <button onClick={() => changeMonth(-1)} className="px-4 py-2 bg-white dark:bg-slate-900 shadow-sm rounded-xl text-slate-600 dark:text-slate-300 font-medium transition-colors hover:text-blue-600 dark:hover:text-blue-600">
                     <ChevronLeft className="w-5 h-5" />
@@ -43,13 +43,13 @@ export default function Calendar({ tasks, updateTask, deleteTask }) {
             </div>
         </div>
         
-        <div className="grid grid-cols-7 gap-1 md:gap-3 mb-2 md:mb-4 text-center text-[10px] md:text-sm font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+        <div className="grid grid-cols-7 gap-1 md:gap-2 mb-2 text-center text-[10px] md:text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest shrink-0">
             <div>Lu</div><div>Ma</div><div>Mi</div><div>Jo</div><div>Vi</div><div>Sâ</div><div>Du</div>
         </div>
 
-        <div className="grid grid-cols-7 gap-1 md:gap-3">
+        <div className="grid grid-cols-7 gap-1 md:gap-2 flex-1 min-h-0">
           {emptyCells.map(i => (
-             <div key={`empty-${i}`} className="bg-background dark:bg-slate-950 transition-colors duration-300 rounded-lg md:rounded-2xl p-1 md:p-2 opacity-40 calendar-day" />
+             <div key={`empty-${i}`} className="bg-background dark:bg-slate-950 transition-colors duration-300 rounded-xl md:rounded-2xl p-2 opacity-30 calendar-day" />
           ))}
 
           {monthDays.map(d => {
@@ -60,8 +60,8 @@ export default function Calendar({ tasks, updateTask, deleteTask }) {
               <div 
                 key={d} 
                 onClick={() => setModalDate(ds)} 
-                className="bg-card dark:border-slate-800 dark:bg-slate-900 transition-colors duration-300 border border-slate-100 rounded-lg md:rounded-2xl p-1 md:p-3 calendar-day flex flex-col gap-0.5 md:gap-1 hover:shadow-md cursor-pointer overflow-hidden">
-                  <span className="text-[10px] md:text-xs font-bold text-slate-500 dark:text-slate-400 text-center md:text-left">{d}</span>
+                className="bg-card dark:border-slate-800 dark:bg-slate-900 transition-colors duration-300 border border-slate-100 rounded-xl md:rounded-2xl p-1 md:p-2 lg:p-3 calendar-day flex flex-col gap-0.5 hover:shadow-lg hover:border-blue-200 dark:hover:border-blue-900/50 cursor-pointer overflow-hidden group transition-all h-full min-h-[60px] md:min-h-0">
+                  <span className="text-[10px] md:text-xs font-bold text-slate-500 dark:text-slate-400 group-hover:text-blue-600 transition-colors">{d}</span>
                   {tsks.slice(0, 2).map((t, index) => (
                     <div key={index} className="text-[8px] md:text-[9px] truncate bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1 rounded font-bold">
                         {t.title}

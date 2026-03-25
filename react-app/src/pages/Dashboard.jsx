@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, RefreshCcw, Plus, ArrowRight, ClipboardCheck, CircleCheck, CircleAlert, CalendarClock, Timer, Play, Pause, Square } from 'lucide-react';
+import { Sparkles, RefreshCcw, Plus, ArrowRight, ClipboardCheck, CircleCheck, CircleAlert, CalendarClock, Timer, Play, Pause, Square, Trash2 } from 'lucide-react';
 import { fetchGemini } from '../services/gemini';
 import { getCategoryData, getPriorityIconStyles, formatDateDisplay, formatTime } from '../utils/formatters';
 import { JournalModal, AIModal } from '../components/Modals';
@@ -258,6 +258,9 @@ export default function Dashboard({ tasks, addTask, updateTask, toggleTaskStatus
                         )}
                         <button onClick={() => setActiveJournalModal({ open: true, task: t })} className="text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-600 w-10 h-10 rounded-2xl flex items-center justify-center">
                            <CalendarClock className="w-4 h-4"/>
+                        </button>
+                        <button onClick={() => deleteTask(t.id)} className="text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-400 w-10 h-10 rounded-2xl flex items-center justify-center transition-colors">
+                           <Trash2 className="w-4 h-4"/>
                         </button>
                     </div>
                 </div>

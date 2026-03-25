@@ -1,6 +1,6 @@
 import { Zap, CalendarDays, ChartPie, Layers, Sparkles, Moon, Sun } from 'lucide-react';
 
-export default function Sidebar({ setView, activeView, toggleTheme, theme }) {
+export default function Sidebar({ setView, activeView, toggleTheme, theme, onOpenAI }) {
   return (
     <aside className="w-72 bg-card dark:border-slate-800 dark:bg-slate-900 transition-colors duration-300 shadow-[4px_0_24px_rgba(0,0,0,0.02)] hidden md:flex flex-col z-10 relative border-r border-slate-100">
       <div className="p-8 pb-4">
@@ -44,7 +44,7 @@ export default function Sidebar({ setView, activeView, toggleTheme, theme }) {
 
       <div className="p-6 space-y-4">
         <button 
-          onClick={() => setView('stats')}
+          onClick={onOpenAI}
           className="w-full py-4 bg-gradient-to-r from-indigo-500 to-blue-600 text-white rounded-2xl font-bold shadow-lg dark:shadow-none shadow-blue-500/20 hover:scale-[1.02] transition-all flex items-center justify-center gap-2">
           <Sparkles className="w-4 h-4" /> Analiză AI
         </button>

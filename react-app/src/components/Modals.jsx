@@ -48,21 +48,21 @@ export function JournalModal({ isOpen, onClose, task, onSave }) {
 export function AIModal({ isOpen, onClose, task }) {
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const loadAIStrategy = () => {
     setLoading(true);
-    fetchGemini(`Oferă o strategie de 3 pași pentru sarcina: "${task.title}". HTML format curat (doar \`<ul><li>...\`), fără markdown bloc (\`\`\`html\`).`)
+    setError(null);
+    fetchGemini(
+      `Oferă o strategie de 3 pași pentru sarcina: "${task.title}". Răspunde în HTML simplu (doar <ul><li>...), fără markdown.`,
+      'Ești un expert în productivitate. Oferi sfaturi clare și acționabile.'
+    )
       .then(res => {
         setContent(res.replace(/```html|```/gi, ''));
       })
       .catch((err) => {
         console.error(err);
-        setContent(`
-          <div class="text-center py-4">
-            <p class="text-rose-500 font-bold mb-2">Cota API a fost atinsă temporar.</p>
-            <p class="text-slate-500 text-xs mb-4">Google limitează numărul de cereri pe minut. Te rugăm să aștepți ~60 secunde.</p>
-          </div>
-        `);
+        setError(err.message || 'Eroare AI. Încearcă din nou.');
       })
       .finally(() => setLoading(false));
   };
@@ -88,12 +88,27 @@ export function AIModal({ isOpen, onClose, task }) {
         </div>
         <div className="p-8 overflow-y-auto flex-1 bg-white dark:bg-slate-900">
           {loading ? (
-            <div className="flex flex-col items-center py-12 text-slate-500 dark:text-slate-400">
-              <Sparkles className="animate-bounce w-10 h-10 text-blue-600 mb-4" />
-              <p>Analizez...</p>
+            <div className="flex flex-col items-center py-12 text-slate-500 dark:text-slate-400 gap-3">
+              <Sparkles className="animate-bounce w-10 h-10 text-blue-600" />
+              <p className="font-medium">Analizez strategia...</p>
+              <p className="text-xs text-slate-400">Câteva secunde, te rog...</p>
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center py-8 text-center gap-4">
+              <div className="w-14 h-14 bg-amber-50 dark:bg-amber-900/20 text-amber-500 rounded-2xl flex items-center justify-center text-2xl">⚠️</div>
+              <div>
+                <p className="font-bold text-slate-700 dark:text-slate-300 mb-1">AI temporar indisponibil</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400 max-w-xs">{error}</p>
+              </div>
+              <button
+                onClick={loadAIStrategy}
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold transition-all flex items-center gap-2 shadow-sm"
+              >
+                <Sparkles className="w-4 h-4" /> Încearcă din nou
+              </button>
             </div>
           ) : (
-            <div 
+            <div
               className="text-slate-600 dark:text-slate-300 text-sm font-medium space-y-4 prose prose-slate max-w-none"
               dangerouslySetInnerHTML={{ __html: content }}
             />
@@ -103,3 +118,4 @@ export function AIModal({ isOpen, onClose, task }) {
     </div>
   );
 }
+

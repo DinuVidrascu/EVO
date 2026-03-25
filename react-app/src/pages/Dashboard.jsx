@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Sparkles, RefreshCcw, Plus, ArrowRight, ClipboardCheck, CircleCheck, CircleAlert, CalendarClock, Timer, Play, Pause, Square, Trash2 } from 'lucide-react';
 import { fetchGemini } from '../services/gemini';
 import { getCategoryData, getPriorityIconStyles, formatDateDisplay, formatTime } from '../utils/formatters';
@@ -18,23 +18,14 @@ export default function Dashboard({ tasks, addTask, updateTask, toggleTaskStatus
 
   const [activeAIModal, setActiveAIModal] = useState({ open: false, task: null });
   const [activeJournalModal, setActiveJournalModal] = useState({ open: false, task: null });
+  const [toast, setToast] = useState(null); // { msg, type }
+  const [confirmDelete, setConfirmDelete] = useState(null); // task id to delete
 
   const activeTasks = tasks.filter(t => !t.completed).sort((a,b) => new Date(a.date) - new Date(b.date));
   const completedTasks = tasks.filter(t => t.completed);
 
-  // Motivatie initiala & actualizare la schimbarea sarcinii
-  useEffect(() => {
-    const savedQuote = localStorage.getItem('evotrack_saved_quote');
-    const savedTaskId = localStorage.getItem('evotrack_saved_quote_taskid');
-    const currentId = timerProps.currentTrackingTaskId ? String(timerProps.currentTrackingTaskId) : 'none';
-
-    // Încarcă un citat nou DOAR dacă:
-    // 1. Nu avem deloc (prima pornire)
-    // 2. S-a schimbat task-ul urmărit (vrem feedback specific pentru cel NOU)
-    if (!savedQuote || savedTaskId !== currentId) {
-      loadMotivation();
-    }
-  }, [timerProps.currentTrackingTaskId]);
+  // Citatul se incarca DOAR la apasarea manuala a butonului refresh
+  // Nu se fac cereri automate la pornire sau la schimbarea task-ului
 
   const loadMotivation = async () => {
     setLoadingQuote(true);
@@ -83,6 +74,21 @@ export default function Dashboard({ tasks, addTask, updateTask, toggleTaskStatus
     setLoadingMagic(false);
   };
 
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 2500);
+  };
+
+  const handleDeleteTask = (taskId) => {
+    setConfirmDelete(taskId);
+  };
+
+  const confirmDeleteTask = () => {
+    deleteTask(confirmDelete);
+    setConfirmDelete(null);
+    showToast('Sarcina a fost ștearsă.', 'error');
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!taskName.trim()) return;
@@ -97,6 +103,7 @@ export default function Dashboard({ tasks, addTask, updateTask, toggleTaskStatus
       journal: ''
     });
     setTaskName('');
+    showToast('Sarcină adăugată cu succes! 🎯');
   };
 
   const completedPct = tasks.length > 0 ? Math.round((completedTasks.length / tasks.length) * 100) : 0;
@@ -104,6 +111,39 @@ export default function Dashboard({ tasks, addTask, updateTask, toggleTaskStatus
 
   return (
     <div className="max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-12 gap-8">
+
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed top-5 right-5 z-[200] fade-in px-5 py-3.5 rounded-2xl shadow-xl font-bold text-sm flex items-center gap-2 ${
+          toast.type === 'error' 
+            ? 'bg-rose-500 text-white' 
+            : 'bg-emerald-500 text-white'
+        }`}>
+          {toast.type === 'error' ? '🗑️' : '✅'} {toast.msg}
+        </div>
+      )}
+
+      {/* Confirm Delete Dialog */}
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4 fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 p-6 max-w-sm w-full text-center">
+            <div className="w-14 h-14 bg-rose-50 dark:bg-rose-900/30 text-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-7 h-7" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">Ștergi sarcina?</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">Această acțiune nu poate fi anulată.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmDelete(null)} className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-2xl font-bold hover:bg-slate-200 transition-colors">
+                Anulează
+              </button>
+              <button onClick={confirmDeleteTask} className="flex-1 py-3 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-bold transition-colors shadow-sm">
+                Șterge
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* LEFT COLUMN */}
       <div className="xl:col-span-8 flex flex-col gap-6 lg:gap-8">
         
@@ -134,52 +174,54 @@ export default function Dashboard({ tasks, addTask, updateTask, toggleTaskStatus
                 </div>
                 <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Planifică o activitate</h2>
             </div>
-            <form onSubmit={handleSubmit} className="space-y-5">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="relative md:col-span-2 w-full">
+            <form onSubmit={handleSubmit} className="space-y-3">
+                {/* Rândul principal: input + categorie */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <div className="relative col-span-2 md:col-span-2 w-full">
                         <input 
                             type="text" 
                             value={taskName}
                             onChange={e => setTaskName(e.target.value)}
-                            placeholder="Scrie o idee și apasă bagheta AI..."
-                            className="px-5 py-3.5 pr-14 bg-background dark:bg-slate-950 transition-colors duration-300 border border-slate-200 dark:border-slate-700/50 rounded-2xl focus:ring-2 focus:ring-blue-600/50 text-slate-700 dark:text-slate-300 font-medium w-full outline-none"
+                            placeholder="Scrie o idee..."
+                            className="px-4 py-3 pr-12 bg-background dark:bg-slate-950 transition-colors duration-300 border border-slate-200 dark:border-slate-700/50 rounded-2xl focus:ring-2 focus:ring-blue-600/50 text-slate-700 dark:text-slate-300 font-medium w-full outline-none text-sm"
                             required
                         />
                         <button 
                             type="button" 
                             onClick={handleSmartTask}
                             disabled={loadingMagic}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center text-amber-500 dark:text-amber-400 hover:bg-amber-50 dark:bg-amber-900/30 hover:text-amber-600 dark:hover:text-amber-400 rounded-xl transition-all disabled:opacity-50"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-amber-500 dark:text-amber-400 hover:bg-amber-50 dark:bg-amber-900/30 rounded-xl transition-all disabled:opacity-50"
                             title="Formatează automat cu AI ✨">
-                            <Sparkles className={`w-5 h-5 ${loadingMagic ? 'animate-spin' : ''}`} />
+                            <Sparkles className={`w-4 h-4 ${loadingMagic ? 'animate-spin' : ''}`} />
                         </button>
                     </div>
                     <select 
                         value={taskCategory} 
                         onChange={e => setTaskCategory(e.target.value)}
-                        className="px-5 py-3.5 bg-background dark:bg-slate-950 border border-slate-200 dark:border-slate-700/50 rounded-2xl text-slate-600 dark:text-slate-300 font-medium w-full outline-none">
+                        className="col-span-2 md:col-span-1 px-4 py-3 bg-background dark:bg-slate-950 border border-slate-200 dark:border-slate-700/50 rounded-2xl text-slate-600 dark:text-slate-300 font-medium w-full outline-none text-sm">
                         <option value="invatare">🧠 Învățare</option>
                         <option value="proiect">💻 Proiect</option>
                         <option value="rutina">🔄 Rutină</option>
                     </select>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Rândul secundar: data + prioritate + buton */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     <input 
                         type="date" 
                         value={taskDate}
                         onChange={e => setTaskDate(e.target.value)}
-                        className="px-5 py-3.5 bg-background dark:bg-slate-950 border border-slate-200 dark:border-slate-700/50 rounded-2xl text-slate-600 dark:text-slate-300 font-medium w-full outline-none"
+                        className="px-4 py-3 bg-background dark:bg-slate-950 border border-slate-200 dark:border-slate-700/50 rounded-2xl text-slate-600 dark:text-slate-300 font-medium w-full outline-none text-sm"
                         required
                     />
                     <select 
                         value={taskPriority}
                         onChange={e => setTaskPriority(e.target.value)}
-                        className="px-5 py-3.5 bg-background dark:bg-slate-950 border border-slate-200 dark:border-slate-700/50 rounded-2xl text-slate-600 dark:text-slate-300 font-medium w-full outline-none">
-                        <option value="low">🔽 Prioritate Mică</option>
-                        <option value="medium">⏺ Prioritate Medie</option>
-                        <option value="high">🔼 Prioritate Mare</option>
+                        className="px-4 py-3 bg-background dark:bg-slate-950 border border-slate-200 dark:border-slate-700/50 rounded-2xl text-slate-600 dark:text-slate-300 font-medium w-full outline-none text-sm">
+                        <option value="low">🔽 Mică</option>
+                        <option value="medium">⏺ Medie</option>
+                        <option value="high">🔼 Mare</option>
                     </select>
-                    <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3.5 rounded-2xl font-bold transition-all flex items-center justify-center gap-2">
+                    <button type="submit" className="col-span-2 md:col-span-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 shadow-sm">
                         Adaugă <ArrowRight className="w-4 h-4"/>
                     </button>
                 </div>
@@ -259,7 +301,7 @@ export default function Dashboard({ tasks, addTask, updateTask, toggleTaskStatus
                         <button onClick={() => setActiveJournalModal({ open: true, task: t })} className="text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-600 w-10 h-10 rounded-2xl flex items-center justify-center">
                            <CalendarClock className="w-4 h-4"/>
                         </button>
-                        <button onClick={() => deleteTask(t.id)} className="text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-400 w-10 h-10 rounded-2xl flex items-center justify-center transition-colors">
+                        <button onClick={() => handleDeleteTask(t.id)} className="text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-400 w-10 h-10 rounded-2xl flex items-center justify-center transition-colors">
                            <Trash2 className="w-4 h-4"/>
                         </button>
                     </div>
@@ -291,8 +333,8 @@ export default function Dashboard({ tasks, addTask, updateTask, toggleTaskStatus
                                   </div>
                               </div>
                           </div>
-                          <button onClick={() => deleteTask(t.id)} className="text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-600 transition-colors shrink-0">
-                              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                          <button onClick={() => handleDeleteTask(t.id)} className="text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-600 transition-colors shrink-0 w-8 h-8 flex items-center justify-center rounded-xl">
+                              <Trash2 className="w-4 h-4" />
                           </button>
                       </div>
                    )

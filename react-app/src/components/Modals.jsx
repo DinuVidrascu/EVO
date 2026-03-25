@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Book, Sparkles } from 'lucide-react';
 import { fetchGemini } from '../services/gemini';
 import { formatDateDisplay, getCategoryData, formatTime, getPriorityIconStyles } from '../utils/formatters';
@@ -17,7 +18,7 @@ export function JournalModal({ isOpen, onClose, task, onSave }) {
     onClose();
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[90] p-4 fade-in" onClick={onClose}>
       <div className="bg-card dark:border-slate-800 dark:bg-slate-900 transition-colors duration-300 rounded-3xl shadow-2xl w-full max-w-lg flex flex-col max-h-[85vh] border border-blue-100 dark:border-slate-700" onClick={e => e.stopPropagation()}>
         <div className="p-5 border-b border-blue-100 dark:border-slate-800 flex justify-between items-center bg-blue-50 dark:bg-slate-800/50">
@@ -41,7 +42,8 @@ export function JournalModal({ isOpen, onClose, task, onSave }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -75,7 +77,7 @@ export function AIModal({ isOpen, onClose, task }) {
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[95] p-4 fade-in" onClick={onClose}>
       <div className="bg-card dark:border-slate-800 dark:bg-slate-900 transition-colors duration-300 rounded-3xl shadow-2xl w-full max-w-xl flex flex-col max-h-[85vh] border border-blue-100 dark:border-slate-700" onClick={e => e.stopPropagation()}>
         <div className="p-5 border-b border-blue-100 dark:border-slate-800 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-800">
@@ -115,7 +117,8 @@ export function AIModal({ isOpen, onClose, task }) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

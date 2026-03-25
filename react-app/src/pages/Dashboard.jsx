@@ -1,8 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Sparkles, RefreshCcw, Plus, ArrowRight, ClipboardCheck, CircleCheck, CircleAlert, CalendarClock, Timer, Play, Pause, Square, Trash2, Search, X, SlidersHorizontal, GripVertical } from 'lucide-react';
 import { fetchGemini } from '../services/gemini';
 import { getCategoryData, getPriorityIconStyles, formatDateDisplay, formatTime } from '../utils/formatters';
 import { JournalModal, AIModal } from '../components/Modals';
+import { QUOTES } from '../data/quotes';
 
 export default function Dashboard({ tasks, addTask, updateTask, toggleTaskStatus, deleteTask, timerProps }) {
   const [taskName, setTaskName] = useState('');
@@ -73,30 +75,30 @@ export default function Dashboard({ tasks, addTask, updateTask, toggleTaskStatus
   // Citatul se incarca DOAR la apasarea manuala a butonului refresh
   // Nu se fac cereri automate la pornire sau la schimbarea task-ului
 
-  const loadMotivation = async () => {
+  // Sistem Logica Citate (Offline/Local)
+  const loadMotivation = () => {
     setLoadingQuote(true);
-    try {
-      const activeTask = timerProps.currentTrackingTaskId 
-        ? tasks.find(t => t.id === timerProps.currentTrackingTaskId) 
-        : null;
-      const currentId = activeTask ? String(activeTask.id) : 'none';
-
-      let prompt = activeTask 
-          ? `Oferă o singură frază scurtă de concentrare pentru sarcina: "${activeTask.title}". Max 10 cuvinte. Răspunde EXCLUSIV cu fraza, fără introducere.` 
-          : "Oferă o singură frază scurtă de disciplină sau motivație. Max 10 cuvinte. Răspunde EXCLUSIV cu fraza, fără introducere, fără ghilimele.";
+    // Simulam un mic delay pentru feedback vizual (optional, dar placut)
+    setTimeout(() => {
+      const randomIndex = Math.floor(Math.random() * QUOTES.length);
+      const newQuote = QUOTES[randomIndex];
       
-      const response = await fetchGemini(prompt, "Ești mentor de productivitate empatic. Oferi doar un singur sfat scurt.");
-      const cleanQuote = response.replace(/^["']|["']$/g, '').trim().split('\n')[0];
-      
-      setQuote(cleanQuote);
-      localStorage.setItem('evotrack_saved_quote', cleanQuote);
-      localStorage.setItem('evotrack_saved_quote_taskid', currentId);
-    } catch (e) {
-      console.error("Motivation Error:", e);
-      setQuote('Fii disciplinat și vei învinge mereu.');
-    }
-    setLoadingQuote(false);
+      setQuote(newQuote);
+      localStorage.setItem('evotrack_saved_quote', newQuote);
+      localStorage.setItem('evotrack_last_quote_time', Date.now().toString());
+      setLoadingQuote(false);
+    }, 400);
   };
+
+  // Verifica daca a trecut o ora pentru auto-refresh
+  useEffect(() => {
+    const lastTime = localStorage.getItem('evotrack_last_quote_time');
+    const oneHour = 60 * 60 * 1000;
+    
+    if (!lastTime || (Date.now() - parseInt(lastTime)) > oneHour) {
+      loadMotivation();
+    }
+  }, []);
 
   const handleSmartTask = async () => {
     if (!taskName.trim()) {
@@ -169,47 +171,66 @@ export default function Dashboard({ tasks, addTask, updateTask, toggleTaskStatus
         </div>
       )}
 
-      {/* Confirm Delete Dialog */}
-      {confirmDelete && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4 fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 p-6 max-w-sm w-full text-center">
-            <div className="w-14 h-14 bg-rose-50 dark:bg-rose-900/30 text-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Trash2 className="w-7 h-7" />
+      {/* Confirm Delete Dialog renderizat prin Portal pentru a evita fixed-trap */}
+      {confirmDelete && createPortal(
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[999] flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl border border-slate-100 dark:border-slate-800 p-8 max-w-sm w-full text-center scale-in">
+            <div className="w-16 h-16 bg-rose-50 dark:bg-rose-900/30 text-rose-500 rounded-3xl flex items-center justify-center mx-auto mb-5 shadow-inner">
+              <Trash2 className="w-8 h-8" />
             </div>
-            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">Ștergi sarcina?</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">Această acțiune nu poate fi anulată.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setConfirmDelete(null)} className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-2xl font-bold hover:bg-slate-200 transition-colors">
+            <h3 className="text-xl font-black text-slate-800 dark:text-slate-100 mb-2">Ștergi sarcina?</h3>
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">Această acțiune este permanentă și va șterge toate datele asociate.</p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button 
+                onClick={() => setConfirmDelete(null)} 
+                className="flex-1 py-3.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-2xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all text-sm order-2 sm:order-1"
+              >
                 Anulează
               </button>
-              <button onClick={confirmDeleteTask} className="flex-1 py-3 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-bold transition-colors shadow-sm">
+              <button 
+                onClick={confirmDeleteTask} 
+                className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-bold transition-all shadow-lg shadow-rose-500/20 text-sm order-1 sm:order-2"
+              >
                 Șterge
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* LEFT COLUMN */}
       <div className="xl:col-span-8 flex flex-col gap-6 lg:gap-8">
         
-        {/* Banner Motivatie */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl shadow-sm p-4 flex items-center gap-4">
-            <div className={`w-10 h-10 bg-white dark:bg-slate-900/20 backdrop-blur-sm text-amber-300 rounded-xl flex items-center justify-center border border-white/20 ${loadingQuote ? 'animate-pulse' : ''}`}>
-                <Sparkles className="w-4 h-4" />
+        {/* Banner Motivatie - Minimalist AI Cadran - MAX FILL */}
+        <div className="bg-card dark:border-slate-800 dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800/50 p-0.5">
+            <div className="relative min-h-12 md:min-h-14 w-full bg-blue-600 rounded-[1.8rem] flex items-center px-4 md:px-8 overflow-hidden shadow-lg shadow-blue-500/20 py-2">
+               {/* Background effect */}
+               <div 
+                  className="absolute inset-0 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 bg-[length:200%_100%] opacity-60"
+                  style={{ animation: 'movingGradient 6s linear infinite' }}
+               />
+               
+               <div className="relative z-10 flex-1 flex items-center gap-3 min-w-0">
+                  <Sparkles className={`w-4 h-4 text-amber-300 shrink-0 ${loadingQuote ? 'animate-pulse' : ''}`} />
+                  <p className={`font-quote text-white/90 tracking-wide leading-tight py-1
+                    ${quote.length > 90 ? 'text-[10px] md:text-sm' : quote.length > 50 ? 'text-xs md:text-base' : 'text-sm md:text-lg'}
+                    ${loadingQuote ? 'animate-pulse' : ''}`}>
+                    &ldquo; {loadingQuote ? 'Se alege un citat...' : quote} &rdquo;
+                  </p>
+               </div>
+
+               <div className="relative z-10 flex items-center gap-4 shrink-0 ml-3">
+                  <span className="text-[10px] font-black text-blue-100 uppercase tracking-tighter opacity-70 hidden sm:inline">Inspirație AI</span>
+                  <button 
+                     onClick={loadMotivation} 
+                     disabled={loadingQuote}
+                     className="w-8 h-8 bg-white/10 hover:bg-white/20 active:scale-95 text-white rounded-xl flex items-center justify-center transition-all border border-white/10 disabled:opacity-50"
+                  >
+                     <RefreshCcw className={`w-3.5 h-3.5 ${loadingQuote ? 'animate-spin' : ''}`} />
+                  </button>
+               </div>
             </div>
-            <div className="flex-1">
-                <h4 className="font-bold text-blue-200 text-[10px] uppercase tracking-widest mb-0.5">✨ Inspirație AI</h4>
-                <p className={`text-sm font-medium text-white leading-snug ${loadingQuote ? 'opacity-70 italic' : ''}`}>
-                    {loadingQuote ? 'Gemini gândește un sfat...' : `"${quote}"`}
-                </p>
-            </div>
-            <button 
-                onClick={loadMotivation}
-                disabled={loadingQuote}
-                className="w-8 h-8 shrink-0 bg-white/10 dark:bg-slate-900/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center transition-all border border-white/10 disabled:opacity-50">
-                <RefreshCcw className={`w-3 h-3 ${loadingQuote ? 'animate-spin' : ''}`} />
-            </button>
         </div>
 
         {/* Task Form */}
@@ -274,23 +295,30 @@ export default function Dashboard({ tasks, addTask, updateTask, toggleTaskStatus
             </form>
         </div>
 
-        {/* Progres Bara */}
-        <div className="bg-card dark:border-slate-800 dark:bg-slate-900 transition-colors duration-300 rounded-3xl shadow-sm dark:shadow-none p-6 lg:p-8 border border-slate-100">
-            <div className="flex justify-between items-end mb-5">
-                <div>
-                    <h3 className="text-slate-400 dark:text-slate-500 text-[11px] font-bold uppercase tracking-widest mb-1">Progres Total</h3>
-                    <div className="text-4xl font-black text-slate-800 dark:text-slate-100">{completedPct}%</div>
-                </div>
-            </div>
-            <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3 mb-3">
-                <div className="bg-blue-600 h-3 rounded-full transition-all duration-1000 shadow-[0_0_12px_rgba(37,99,235,0.4)]" style={{ width: `${completedPct}%` }}></div>
-            </div>
-            <div className="flex justify-between items-center text-xs font-bold text-slate-400 dark:text-slate-500">
-                <span>Început</span>
-                <span className="bg-slate-50 dark:bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400">
-                    {completedTasks.length} / {tasks.length} Sarcini
-                </span>
-                <span>100%</span>
+        {/* Progres Total - Ultra Minimalist & Integrat - MAX FILL */}
+        <div className="bg-card dark:border-slate-800 dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800/50 p-0.5">
+            <div className="relative h-12 md:h-14 w-full bg-slate-100/50 dark:bg-slate-800/20 rounded-[1.8rem] overflow-hidden flex items-center">
+               {/* Bara de umplere */}
+               <div 
+                  className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-600 bg-[length:200%_100%] transition-all duration-1000 shadow-[4px_0_15px_rgba(37,99,235,0.4)]" 
+                  style={{ width: `${completedPct}%`, animation: completedPct > 0 ? 'movingGradient 4s linear infinite' : 'none' }} 
+               />
+               
+               {/* Overlay Informații */}
+               <div className="relative z-10 w-full flex items-center justify-between px-4 md:px-8 pointer-events-none">
+                  <div className="flex items-center gap-3">
+                     <div className={`w-2.5 h-2.5 rounded-full ${completedPct > 0 ? 'bg-white shadow-[0_0_8px_white] animate-pulse' : 'bg-blue-600'}`} />
+                     <div className="flex flex-col md:flex-row md:items-center md:gap-4 leading-none">
+                        <span className={`text-sm md:text-base font-black ${completedPct > 30 ? 'text-white' : 'text-slate-800 dark:text-slate-200'}`}>{completedPct}%</span>
+                        <span className={`text-[10px] md:text-xs font-bold uppercase tracking-[0.2em] ${completedPct > 45 ? 'text-white/80' : 'text-slate-400 dark:text-slate-500'}`}>Eficiență</span>
+                     </div>
+                  </div>
+                  
+                  <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-md px-4 py-2 rounded-2xl border border-slate-100/20 shadow-sm flex items-center gap-2">
+                     <span className="text-sm font-black text-slate-800 dark:text-slate-100">{completedTasks.length} / {tasks.length}</span>
+                     <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tighter hidden sm:inline">Sarcini</span>
+                  </div>
+               </div>
             </div>
         </div>
 
@@ -402,70 +430,71 @@ export default function Dashboard({ tasks, addTask, updateTask, toggleTaskStatus
                     isTracking ? 'border-blue-600 ring-2 ring-blue-600/20' :
                     isOver ? 'border-blue-400 border-dashed' :
                     'border-slate-100'
-                  } rounded-3xl p-5 flex items-center justify-between shadow-sm dark:shadow-none transition-all duration-200 ${isDragging ? 'opacity-40 scale-95' : 'opacity-100'}`}
+                  } rounded-[2rem] p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between shadow-sm dark:shadow-none transition-all duration-200 ${isDragging ? 'opacity-40 scale-95' : 'opacity-100'} gap-4 md:gap-0`}
                 >
-                    <div className="flex items-center gap-5 flex-1 overflow-hidden">
-                        {/* Drag handle */}
-                        <div className="text-slate-300 dark:text-slate-700 cursor-grab active:cursor-grabbing shrink-0 hover:text-slate-400 dark:hover:text-slate-500 transition-colors">
+                    <div className="flex items-center gap-3 md:gap-5 flex-1 min-w-0">
+                        {/* Drag handle - ascuns pe mobile pt a evita drag accidental la scroll */}
+                        <div className="hidden md:flex text-slate-300 dark:text-slate-700 cursor-grab active:cursor-grabbing shrink-0 hover:text-slate-400 dark:hover:text-slate-500 transition-colors">
                           <GripVertical className="w-4 h-4" />
                         </div>
                         <button onClick={() => {
-
                             toggleTaskStatus(t.id);
                             if(isTracking) timerProps.stopTracking();
-                        }} className="text-slate-200 dark:text-slate-700 hover:text-emerald-400 dark:hover:text-emerald-400 transition-transform">
+                        }} className="text-slate-200 dark:text-slate-700 hover:text-emerald-400 dark:hover:text-emerald-400 transition-transform shrink-0">
                             <CircleCheck className="w-8 h-8" />
                         </button>
-                        <div className="flex-1 truncate">
-                            <div className="flex items-center gap-3 mb-1">
-                            <CircleAlert className={`w-3 h-3 ${prioStyles} shrink-0`} />
-                            {editingId === t.id ? (
-                              <input
-                                autoFocus
-                                value={editingTitle}
-                                onChange={e => setEditingTitle(e.target.value)}
-                                onBlur={() => {
-                                  if (editingTitle.trim()) updateTask(t.id, { title: editingTitle.trim() });
-                                  setEditingId(null);
-                                }}
-                                onKeyDown={e => {
-                                  if (e.key === 'Enter') e.target.blur();
-                                  if (e.key === 'Escape') { setEditingId(null); }
-                                }}
-                                className="font-bold text-slate-800 dark:text-slate-100 bg-blue-50 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 rounded-lg px-2 py-0.5 outline-none flex-1 min-w-0 text-sm"
-                              />
-                            ) : (
-                              <h4
-                                className={`font-bold text-slate-800 dark:text-slate-100 truncate cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors ${isTracking ? 'text-blue-600 dark:text-blue-600' : ''}`}
-                                onDoubleClick={() => { setEditingId(t.id); setEditingTitle(t.title); }}
-                                title="Dublu-click pentru a edita"
-                              >{t.title}</h4>
-                            )}
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                                <CircleAlert className={`w-3 h-3 ${prioStyles} shrink-0`} />
+                                {editingId === t.id ? (
+                                  <input
+                                    autoFocus
+                                    value={editingTitle}
+                                    onChange={e => setEditingTitle(e.target.value)}
+                                    onBlur={() => {
+                                      if (editingTitle.trim()) updateTask(t.id, { title: editingTitle.trim() });
+                                      setEditingId(null);
+                                    }}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') e.target.blur();
+                                      if (e.key === 'Escape') { setEditingId(null); }
+                                    }}
+                                    className="font-bold text-slate-800 dark:text-slate-100 bg-blue-50 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 rounded-lg px-2 py-0.5 outline-none flex-1 min-w-0 text-sm"
+                                  />
+                                ) : (
+                                  <h4
+                                    className={`font-bold text-slate-800 dark:text-slate-100 truncate md:whitespace-normal cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors ${isTracking ? 'text-blue-600 dark:text-blue-600' : ''}`}
+                                    onDoubleClick={() => { setEditingId(t.id); setEditingTitle(t.title); }}
+                                    title="Dublu-click pentru a edita"
+                                  >{t.title}</h4>
+                                )}
                             </div>
-                            <div className="flex flex-wrap items-center gap-3 text-xs font-bold text-slate-400 dark:text-slate-500">
-                                <span className={`${cat.styles} text-[10px] font-bold px-2 py-0.5 rounded-lg`}>{cat.label}</span> 
+                            <div className="flex flex-wrap items-center gap-2 md:gap-3 text-[10px] md:text-xs font-bold text-slate-400 dark:text-slate-500">
+                                <span className={`${cat.styles} px-1.5 md:px-2 py-0.5 rounded-lg`}>{cat.label}</span> 
                                 <span className="flex items-center gap-1"><CalendarClock className="w-3 h-3"/> {formatDateDisplay(t.date)}</span> 
-                                <span>{formatTime(t.timeSpent)}</span>
+                                <span className="bg-slate-50 dark:bg-slate-800 px-1.5 rounded">{formatTime(t.timeSpent)}</span>
                             </div>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <button onClick={() => setActiveAIModal({ open: true, task: t })} className="text-amber-500 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 w-10 h-10 rounded-2xl flex items-center justify-center hover:scale-105 transition-all">
+                    {/* Action Buttons Row */}
+                    <div className="flex items-center gap-2 justify-end pt-2 md:pt-0 border-t md:border-0 border-slate-50 dark:border-slate-800/50">
+                        <button onClick={() => setActiveAIModal({ open: true, task: t })} className="text-amber-500 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 w-9 h-9 md:w-10 md:h-10 rounded-2xl flex items-center justify-center hover:scale-105 transition-all">
                             <Sparkles className="w-4 h-4"/>
                         </button>
                         {isTracking ? (
-                            <button onClick={timerProps.stopTracking} className="bg-rose-500 dark:bg-rose-600 text-white w-10 h-10 rounded-2xl flex items-center justify-center shadow-md">
-                                <Square className="w-4 h-4 fill-current"/>
+                            <button onClick={timerProps.stopTracking} className="bg-rose-500 dark:bg-rose-600 text-white w-9 h-9 md:w-10 md:h-10 rounded-2xl flex items-center justify-center shadow-md animate-pulse">
+                                <Square className="w-4 h-4 fill-current" />
                             </button>
                         ) : (
-                            <button onClick={() => timerProps.startTracking(t)} className="bg-slate-800 dark:bg-slate-700 text-white w-10 h-10 rounded-2xl flex items-center justify-center shadow-md">
+                            <button onClick={() => timerProps.startTracking(t)} className="bg-slate-800 dark:bg-slate-700 text-white w-9 h-9 md:w-10 md:h-10 rounded-2xl flex items-center justify-center shadow-md hover:bg-blue-600 transition-colors">
                                 <Play className="w-4 h-4 fill-current translate-x-[1px]" />
                             </button>
                         )}
-                        <button onClick={() => setActiveJournalModal({ open: true, task: t })} className="text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-600 w-10 h-10 rounded-2xl flex items-center justify-center">
+                        <button onClick={() => setActiveJournalModal({ open: true, task: t })} className="text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-600 w-9 h-9 md:w-10 md:h-10 rounded-2xl flex items-center justify-center">
                            <CalendarClock className="w-4 h-4"/>
                         </button>
-                        <button onClick={() => handleDeleteTask(t.id)} className="text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-400 w-10 h-10 rounded-2xl flex items-center justify-center transition-colors">
+                        <div className="w-[1px] h-6 bg-slate-100 dark:bg-slate-800 mx-1 hidden md:block" />
+                        <button onClick={() => handleDeleteTask(t.id)} className="text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-400 w-9 h-9 md:w-10 md:h-10 rounded-2xl flex items-center justify-center transition-colors">
                            <Trash2 className="w-4 h-4"/>
                         </button>
                     </div>

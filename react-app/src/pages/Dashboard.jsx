@@ -22,32 +22,38 @@ export default function Dashboard({ tasks, addTask, updateTask, toggleTaskStatus
   const activeTasks = tasks.filter(t => !t.completed).sort((a,b) => new Date(a.date) - new Date(b.date));
   const completedTasks = tasks.filter(t => t.completed);
 
-  // Initial Motivation & Update on task change
+  // Motivatie initiala & actualizare la schimbarea sarcinii
   useEffect(() => {
-    // Încărcăm un citat nou doar dacă:
+    const savedQuote = localStorage.getItem('evotrack_saved_quote');
+    const savedTaskId = localStorage.getItem('evotrack_saved_quote_taskid');
+    const currentId = timerProps.currentTrackingTaskId ? String(timerProps.currentTrackingTaskId) : 'none';
+
+    // Încarcă un citat nou DOAR dacă:
     // 1. Nu avem deloc (prima pornire)
-    // 2. S-a schimbat task-ul urmărit (vrem feedback specific)
-    const saved = localStorage.getItem('evotrack_saved_quote');
-    if (!saved || timerProps.currentTrackingTaskId) {
+    // 2. S-a schimbat task-ul urmărit (vrem feedback specific pentru cel NOU)
+    if (!savedQuote || savedTaskId !== currentId) {
       loadMotivation();
     }
   }, [timerProps.currentTrackingTaskId]);
 
   const loadMotivation = async () => {
-    // Evităm să poluăm API-ul dacă nu e cazul (de ex. la încărcarea inițială dacă avem quote salvat)
-    // Dar pentru UX, îl lăsăm să ruleze
     setLoadingQuote(true);
     try {
       const activeTask = timerProps.currentTrackingTaskId 
         ? tasks.find(t => t.id === timerProps.currentTrackingTaskId) 
         : null;
+      const currentId = activeTask ? String(activeTask.id) : 'none';
+
       let prompt = activeTask 
           ? `Oferă o singură frază scurtă de concentrare pentru sarcina: "${activeTask.title}". Max 10 cuvinte. Răspunde EXCLUSIV cu fraza, fără introducere.` 
           : "Oferă o singură frază scurtă de disciplină sau motivație. Max 10 cuvinte. Răspunde EXCLUSIV cu fraza, fără introducere, fără ghilimele.";
+      
       const response = await fetchGemini(prompt, "Ești mentor de productivitate empatic. Oferi doar un singur sfat scurt.");
       const cleanQuote = response.replace(/^["']|["']$/g, '').trim().split('\n')[0];
+      
       setQuote(cleanQuote);
       localStorage.setItem('evotrack_saved_quote', cleanQuote);
+      localStorage.setItem('evotrack_saved_quote_taskid', currentId);
     } catch (e) {
       console.error("Motivation Error:", e);
       setQuote('Fii disciplinat și vei învinge mereu.');

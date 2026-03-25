@@ -17,13 +17,22 @@ export const fetchGemini = async (prompt, systemInstruction = "Ești un asistent
     });
     
     if (!response.ok) {
-        throw new Error(`HTTP Error: ${response.status}`);
+        const errText = await response.text();
+        throw new Error(`HTTP Error: ${response.status} - ${errText}`);
     }
 
     const data = await response.json();
-    return data.candidates[0].content.parts[0].text;
+    
+    // Robust checking for response parts
+    if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+      return data.candidates[0].content.parts[0].text;
+    } else if (data.promptFeedback && data.promptFeedback.blockReason) {
+      return "Sfatul a fost reținut din motive de siguranță. Încearcă altceva.";
+    } else {
+      throw new Error("Răspuns invalid de la API.");
+    }
   } catch (e) {
-    console.error("Gemini API Error:", e);
-    throw e; // Lăsăm eroarea să fie prinsă în funcțiile superioare pt mesaje corecte
+    console.error("Gemini Utility Error:", e);
+    throw e;
   }
 };

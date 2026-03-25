@@ -10,7 +10,9 @@ export default function Dashboard({ tasks, addTask, updateTask, toggleTaskStatus
   const [taskPriority, setTaskPriority] = useState('medium');
   const [taskDate, setTaskDate] = useState(new Date().toISOString().split('T')[0]);
   
-  const [quote, setQuote] = useState('Generez un sfat...');
+  const [quote, setQuote] = useState(() => {
+    return localStorage.getItem('evotrack_saved_quote') || 'Pregătește-te pentru o zi productivă!';
+  });
   const [loadingMagic, setLoadingMagic] = useState(false);
   const [loadingQuote, setLoadingQuote] = useState(false);
 
@@ -20,23 +22,34 @@ export default function Dashboard({ tasks, addTask, updateTask, toggleTaskStatus
   const activeTasks = tasks.filter(t => !t.completed).sort((a,b) => new Date(a.date) - new Date(b.date));
   const completedTasks = tasks.filter(t => t.completed);
 
-  // Initial Motivation
+  // Initial Motivation & Update on task change
   useEffect(() => {
-    loadMotivation();
-  }, []);
+    // Încărcăm un citat nou doar dacă:
+    // 1. Nu avem deloc (prima pornire)
+    // 2. S-a schimbat task-ul urmărit (vrem feedback specific)
+    const saved = localStorage.getItem('evotrack_saved_quote');
+    if (!saved || timerProps.currentTrackingTaskId) {
+      loadMotivation();
+    }
+  }, [timerProps.currentTrackingTaskId]);
 
   const loadMotivation = async () => {
+    // Evităm să poluăm API-ul dacă nu e cazul (de ex. la încărcarea inițială dacă avem quote salvat)
+    // Dar pentru UX, îl lăsăm să ruleze
     setLoadingQuote(true);
     try {
       const activeTask = timerProps.currentTrackingTaskId 
         ? tasks.find(t => t.id === timerProps.currentTrackingTaskId) 
         : null;
       let prompt = activeTask 
-          ? `Sfat scurt de concentrare pentru lucrul la "${activeTask.title}". Max 10 cuvinte.` 
-          : "Frază originală disciplină. Max 10 cuvinte.";
-      const response = await fetchGemini(prompt, "Ești mentor de productivitate empatic.");
-      setQuote(response.replace(/^["']|["']$/g, '').trim());
-    } catch {
+          ? `Oferă o singură frază scurtă de concentrare pentru sarcina: "${activeTask.title}". Max 10 cuvinte. Răspunde EXCLUSIV cu fraza, fără introducere.` 
+          : "Oferă o singură frază scurtă de disciplină sau motivație. Max 10 cuvinte. Răspunde EXCLUSIV cu fraza, fără introducere, fără ghilimele.";
+      const response = await fetchGemini(prompt, "Ești mentor de productivitate empatic. Oferi doar un singur sfat scurt.");
+      const cleanQuote = response.replace(/^["']|["']$/g, '').trim().split('\n')[0];
+      setQuote(cleanQuote);
+      localStorage.setItem('evotrack_saved_quote', cleanQuote);
+    } catch (e) {
+      console.error("Motivation Error:", e);
       setQuote('Fii disciplinat și vei învinge mereu.');
     }
     setLoadingQuote(false);

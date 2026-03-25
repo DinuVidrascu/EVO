@@ -49,17 +49,27 @@ export function AIModal({ isOpen, onClose, task }) {
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
 
+  const loadAIStrategy = () => {
+    setLoading(true);
+    fetchGemini(`Oferă o strategie de 3 pași pentru sarcina: "${task.title}". HTML format curat (doar \`<ul><li>...\`), fără markdown bloc (\`\`\`html\`).`)
+      .then(res => {
+        setContent(res.replace(/```html|```/gi, ''));
+      })
+      .catch((err) => {
+        console.error(err);
+        setContent(`
+          <div class="text-center py-4">
+            <p class="text-rose-500 font-bold mb-2">Cota API a fost atinsă temporar.</p>
+            <p class="text-slate-500 text-xs mb-4">Google limitează numărul de cereri pe minut. Te rugăm să aștepți ~60 secunde.</p>
+          </div>
+        `);
+      })
+      .finally(() => setLoading(false));
+  };
+
   useEffect(() => {
     if (isOpen && task) {
-      setLoading(true);
-      fetchGemini(`Oferă o strategie de 3 pași pentru sarcina: "${task.title}". HTML format curat (doar \`<ul><li>...\`), fără markdown bloc (\`\`\`html\`).`)
-        .then(res => {
-          setContent(res.replace(/```html|```/gi, ''));
-        })
-        .catch(() => {
-          setContent('<p class="text-rose-500">A apărut o eroare la conexiunea AI.</p>');
-        })
-        .finally(() => setLoading(false));
+      loadAIStrategy();
     }
   }, [isOpen, task]);
 

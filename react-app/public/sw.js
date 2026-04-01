@@ -1,5 +1,5 @@
 // Service Worker de bază pentru compatibilitate PWA
-self.addEventListener('install', (event) => {
+self.addEventListener('install', () => {
   // Nimic special momentan, doar necesar pentru browser
 });
 

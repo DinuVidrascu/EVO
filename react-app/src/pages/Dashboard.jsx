@@ -96,6 +96,7 @@ export default function Dashboard({ tasks, addTask, updateTask, toggleTaskStatus
     const oneHour = 60 * 60 * 1000;
     
     if (!lastTime || (Date.now() - parseInt(lastTime)) > oneHour) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       loadMotivation();
     }
   }, []);

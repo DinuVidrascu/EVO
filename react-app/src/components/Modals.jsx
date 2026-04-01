@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Book, Sparkles } from 'lucide-react';
 import { fetchGemini } from '../services/gemini';
-import { formatDateDisplay, getCategoryData, formatTime, getPriorityIconStyles } from '../utils/formatters';
 
 export function JournalModal({ isOpen, onClose, task, onSave }) {
   const [text, setText] = useState('');
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (task) setText(task.journal || '');
   }, [task]);
 
@@ -71,8 +71,10 @@ export function AIModal({ isOpen, onClose, task }) {
 
   useEffect(() => {
     if (isOpen && task) {
+       
       loadAIStrategy();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, task]);
 
   if (!isOpen) return null;

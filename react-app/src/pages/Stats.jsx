@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Clock, CheckCheck, Sparkles, BookOpen, Cpu, RefreshCcw, Download, Bell, BellOff, TrendingUp } from 'lucide-react';
 import { fetchGemini } from '../services/gemini';
 import { formatTime } from '../utils/formatters';
@@ -86,13 +86,12 @@ export default function Stats({ tasks }) {
   });
   const totalTime = catData.reduce((a, c) => a + c.time, 0) || 1;
 
-  let offset = 25;
-  const segments = catData.map(cat => {
+  const segments = catData.reduce((acc, cat) => {
     const pct = (cat.time / totalTime) * 100;
-    const seg = { ...cat, pct, offset };
-    offset = offset - pct;
-    return seg;
-  });
+    const offset = acc.length > 0 ? acc[acc.length - 1].offset - acc[acc.length - 1].pct : 25;
+    acc.push({ ...cat, pct, offset });
+    return acc;
+  }, []);
 
   const weeklyData = buildWeeklyData(tasks);
   const maxVal = Math.max(...weeklyData.map(d => d.added), 1);
@@ -272,7 +271,7 @@ export default function Stats({ tasks }) {
           <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Activitate — Ultimele 7 Zile</h3>
         </div>
         <div className="flex items-end gap-3 h-40">
-          {weeklyData.map((day, i) => (
+          {weeklyData.map((day) => (
             <div key={day.dateStr} className="flex-1 flex flex-col items-center gap-2">
               {/* Bara adăugate */}
               <div className="w-full flex flex-col items-center gap-1 justify-end" style={{ height: '120px' }}>
